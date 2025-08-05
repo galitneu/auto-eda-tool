@@ -76,7 +76,7 @@ def show_file_description(df_desc):
                 st.pyplot(fig)
         
 
-#מציגה ניתוח קשרים בין שתי עמודות.
+#מציגה ניתוח קשרים בין שתי עמודות
 def show_bivariate(df, numeric_list, all_list):
     
     col1 = st.selectbox("Select a numeric column (X-axis):", options=numeric_list, key='bivar_col1')
