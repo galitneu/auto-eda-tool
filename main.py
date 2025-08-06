@@ -140,6 +140,13 @@ def show_single_variable_analysis(df, all_list, numeric_list):
     col_selected = st.selectbox("Select a column to analyze:", options=all_list, key='univar_col')
 
     if col_selected:
+        missing_count = df[col_selected].isnull().sum()
+        total_count = len(df)
+        missing_percentage = (missing_count / total_count) * 100 
+        if missing_percentage>0:
+            st.write(f"**Missing values:** {missing_count} ,  **Missing percentage:** {missing_percentage:.2f}% of all cells") 
+
+
         #במקרה של עמודה מספרית
         if col_selected in numeric_list:
             st.write(f"**Analysis of Numeric Column: {col_selected}**")
