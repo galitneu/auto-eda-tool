@@ -14,10 +14,6 @@ def show_file_description(df_desc):
     row, col = df_desc.shape
     st.write(f"**Total Rows in file:** {row}, **Total Columns in file:** {col}") # הצגת מספר השורות והעמודות בקובץ
     
-    df_size=df_desc.size
-    df_nullcells = df_desc.isnull().sum().sum()
-    nullcells_perc=(df_nullcells/df_size)*100
-    st.write(f"**Number of cells:** {df_size} **Number of empty cells:** {df_nullcells} (which are {nullcells_perc:.2f}% of all cells)") # הצגת מספר התאים בקובץ, מספר התאים הריקים ואחוז התאים הריקים
     
     # הצגת סוגי הנתונים וערכים חסרים
     st.write("**Columns Data Types and Missing Values:**")
@@ -27,6 +23,11 @@ def show_file_description(df_desc):
                     }
     st.dataframe(pd.DataFrame(summary_dict))
 
+    df_size=df_desc.size
+    df_nullcells = df_desc.isnull().sum().sum()
+    nullcells_perc=(df_nullcells/df_size)*100
+    st.write(f"**Number of cells:** {df_size} **Number of empty cells:** {df_nullcells} (which are {nullcells_perc:.2f}% of all cells)") # הצגת מספר התאים בקובץ, מספר התאים הריקים ואחוז התאים הריקים
+     
     
     # מסננים כדי להציג רק עמודות שיש בהן ערכים חסרים
     missing_values = df_desc.isnull().sum()
@@ -36,6 +37,7 @@ def show_file_description(df_desc):
         st.write("**Missing Values Distribution:**")
         st.bar_chart(missing_values)
     
+    st.dataframe(df_desc.describe(include='all'))
     
     #חישוב והצגת ערכים חריגים
     st.write("**Outliers Detection:**")
@@ -46,6 +48,7 @@ def show_file_description(df_desc):
         st.write("No numeric columns found for outlier detection.")
     else:
         for col_name in numeric_list:
+            
             Q1, Q3 =  pd.Series(df_desc[col_name]).quantile([0.25, 0.75])
             IQR = Q3 - Q1
             lower_bound = Q1 - 1.5 * IQR
@@ -67,14 +70,35 @@ def show_file_description(df_desc):
             #הצגת התוצאות
             outlier_df = pd.DataFrame(results)
             st.dataframe(outlier_df)
-            st.write("**Outliers Distribution:**")
-            for col_name in outlier_df['Column']:
-                st.write(f"**Box Plot for: {col_name}**")
-                fig, ax = plt.subplots()
-                # הצגת תיבת התפלגות עבור כל עמודה עם ערכים חריגים
-                sns.boxplot(data=df_desc, x=col_name, ax=ax)
-                st.pyplot(fig)
+            value=True
+            if st.checkbox("Show Outliers Distribution", value=True):
+                st.write("**Outliers Distribution:**")
+                for col_name in outlier_df['Column']:
+                    st.write(f"**Box Plot for: {col_name}**")
+                    fig, ax = plt.subplots()
+                    # הצגת תיבת התפלגות עבור כל עמודה עם ערכים חריגים
+                    sns.boxplot(data=df_desc, x=col_name, ax=ax)
+                    st.pyplot(fig)
         
+        if 'cleaned_df' in st.session_state:
+            
+            numeric_df = df_desc.select_dtypes(include=np.number)
+            
+            if numeric_df.shape[1] > 1:
+                st.write("**Correlation between all numeric columns in the dataset.**")
+                corr_matrix = numeric_df.corr()
+            
+                fig, ax = plt.subplots(figsize=(12, 10))
+                sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap='coolwarm', ax=ax)
+                st.pyplot(fig)
+
+                if numeric_df.shape[1] < 7:
+                    st.write("**Pairplot of all numeric columns:**")
+                    fig= sns.pairplot(numeric_df)
+                    st.pyplot(fig) 
+
+
+                    
 
 #מציגה ניתוח קשרים בין שתי עמודות
 def show_bivariate(df, numeric_list, all_list):
@@ -83,19 +107,33 @@ def show_bivariate(df, numeric_list, all_list):
     col2 = st.selectbox("Select a second column (Y-axis or category):", options=all_list, key='bivar_col2')
 
     if col1 and col2:
+        st.write(f"**Analysis of {col1} by {col2}**")
         # בדיקה אם העמודה השנייה היא מספרית או קטגוריאלית
         if col2 in numeric_list:
-            st.write(f"**Scatter Plot: {col1} vs {col2}**")
             fig, ax = plt.subplots()
-            sns.scatterplot(data=df, x=col1, y=col2, ax=ax)
+            st.write(f"**Scatter Plot with Regression Line: {col1} vs {col2}**")
+            sns.regplot(data=df, x=col1, y=col2, ax=ax,
+                        line_kws={"color": "red"}) 
             st.pyplot(fig)
+
         else:
-            st.write(f"**Box Plot: {col1} by {col2}**")
             st.dataframe(df.groupby(col2)[col1].describe())
+            plot_type = st.radio(
+                "Select plot type:",
+                ('Box Plot', 'Violin Plot'),
+                key='bivar_plot_type'
+            )
             fig, ax = plt.subplots()
-            sns.boxplot(x=col2, y=col1, data=df, ax=ax)
+            if plot_type == 'Box Plot':
+                st.write(f"**Box Plot: {col1} by {col2}**")
+                sns.boxplot(x=col2, y=col1, data=df, ax=ax)
+            elif plot_type == 'Violin Plot':
+                st.write(f"**Violin Plot: {col1} by {col2}**")
+                sns.violinplot(x=col2, y=col1, data=df, ax=ax)
             plt.xticks(rotation=45)
             st.pyplot(fig)
+
+
 
 # מציגה ניתוח עבור עמודה בודדת
 def show_single_variable_analysis(df, all_list, numeric_list):
@@ -121,6 +159,7 @@ def show_single_variable_analysis(df, all_list, numeric_list):
                 #הצגת קורלציות רק של העמודה הנבחרת
                 sns.barplot(x=corr_matrix[col_selected].values, y=corr_matrix[col_selected].index, ax=ax)
                 st.pyplot(fig)
+
         else:
             #במקרה של עמודה קטגוריאלית
             st.write(f"**Analysis of Categorical Column: {col_selected}**")
@@ -130,6 +169,8 @@ def show_single_variable_analysis(df, all_list, numeric_list):
             fig, ax = plt.subplots()
             sns.countplot(data=df, y=col_selected, ax=ax)
             st.pyplot(fig)
+        
+        
 
 
 #תוכנית ראשית
@@ -241,12 +282,6 @@ if uploaded_file is not None:
         df_to_analyze = st.session_state['cleaned_df']
 
         st.sidebar.title("Navigation Menu")
-
-        ## כפתור לחזור אחורה ולנקות מחדש
-        #if st.sidebar.button("Upload a New File or \n Clean Again"):
-        #    del st.session_state['cleaned_df']
-        #    del st.session_state['original_df']
-        #    st.rerun()
 
      
         # חישוב רשימות העמודות המספריות והקטגוריאליות
