@@ -139,85 +139,114 @@ st.write("This tool allows you to perform exploratory data analysis on your CSV 
 uploaded_file = st.file_uploader("Please upload a CSV file to get started.", type=["csv"])
 
 if uploaded_file is not None:
-   
-    if 'original_df' not in st.session_state or st.session_state.uploaded_file_name != uploaded_file.name:
+    
+    is_new_file = 'uploaded_file_name' not in st.session_state or st.session_state.uploaded_file_name != uploaded_file.name
+    
+    if is_new_file:
         try:
             st.session_state.original_df = pd.read_csv(uploaded_file)
             st.session_state.uploaded_file_name = uploaded_file.name
-            # אם מעלים קובץ חדש אז מנקים את הגרסה הנקיים הישנה
+           
             if 'cleaned_df' in st.session_state:
                 del st.session_state['cleaned_df']
+            if 'show_confirmation' in st.session_state:
+                del st.session_state['show_confirmation']
         except Exception as e:
             st.error(f"Error reading file: {e}")
-            st.stop() # עצור אם הקובץ לא תקין
-
-        #בדיקה שיש רשומות
+            st.stop()
+    
        
-    if 'cleaned_df' not in st.session_state:        
-        if not st.session_state.original_df.empty:
+    if 'cleaned_df' not in st.session_state: 
+        if 'original_df' in st.session_state and not st.session_state.original_df.empty:
             st.write("**File Overview:**")
             show_file_description(st.session_state.original_df)
-        
-            with st.form(key='cleaning_form'):
-                st.write("**Data Cleaning Options:**")
-                st.write("You can choose to remove duplicate rows and/or clean missing values in the file.")
-                
-                #הצגת אפשרות להסרת שורות כפולות
-                remove_duplicates_option = st.checkbox("Remove duplicate rows")
-                
-                #הצגת אפשרות לטיפול בערכים חסרים (אם קריימיים כאלה)
-                missing_cols = st.session_state.original_df.columns[st.session_state.original_df.isnull().any()].tolist()
-                cleaning_selection = None
-                if missing_cols:
-                    cleaning_options = [
-                                    "Do not clean missing values",
-                                    "Remove rows that are completely empty",
-                                    "Remove any row with a missing value"
-                                    ]
-                    cleaning_selection = st.radio("Handle missing values:", cleaning_options)
-                else:
-                    st.info("No missing values were found in the file.")
-
-                
-                submitted = st.form_submit_button("choose how to clean the data and move to analysis")  
-                        
-                if submitted:
-                    df_cleaned = st.session_state.original_df.copy()
-                    old_row = len(df_cleaned)
-
-                    #הסרת שורות כפולות אם נבחר
-                    if remove_duplicates_option:
-                        df_cleaned.drop_duplicates(inplace=True)
-                        
-                    if cleaning_selection:
-                        if cleaning_selection == cleaning_options[1]: # מחיקת שורות שהן ריקות לגמרי
-                            df_cleaned.dropna(how='all',inplace=True)
-                        elif cleaning_selection == cleaning_options[2]: # מחיקת שורות שיש בהן עמודות ריקות
-                            df_cleaned.dropna(how='any',inplace=True)
-
-                    new_row = len(df_cleaned)
-                    deleted_rows=old_row-new_row
-                    st.success(f"**Deletd: {deleted_rows}** rows.")
-                    
-                    #שמירת הנתותנים הנקיים
-                    st.session_state['cleaned_df'] = df_cleaned
-                    st.rerun()
         else:
-            st.warning("The uploaded file is empty.")
-                
+            st.warning("The uploaded file is empty or could not be read.")
+            st.stop() 
 
+        # אם יש נתונים נקיים, מציגה את האפשרות להמשיך לניתוח
+        if st.session_state.get('show_confirmation', False):
+            st.header("Cleaning Summary")
+            deleted_rows = st.session_state.get('deleted_rows', 0)
+            temp_df = st.session_state.get('temp_cleaned_df')
+            
+            st.success(f"**Cleaning complete. Deleted: {deleted_rows} rows.**")
+        
+            if temp_df is not None:
+                # בדיקה אם ה-DataFrame ריק
+                if temp_df.empty:
+                    st.error("Warning: All rows were deleted after cleaning. Please go back and upload a new file and try a differnt cleaning option.")
+                else:
+                    st.write(f"The cleaned file now has **{len(temp_df)}** rows.")
+                    if st.button("Proceed to Analysis"):
+                        st.session_state['cleaned_df'] = st.session_state['temp_cleaned_df']
+                        # ניקוי משתנים זמניים
+                        del st.session_state['temp_cleaned_df']
+                        del st.session_state['deleted_rows']
+                        st.session_state['show_confirmation'] = False
+                        st.rerun()
+        else:
+            
+                with st.form(key='cleaning_form'):
+                    st.header("**Data Cleaning Options:**")
+                    st.write("You can choose to remove duplicate rows and/or clean missing values in the file.")
+                    
+                    #הצגת אפשרות להסרת שורות כפולות
+                    remove_duplicates_option = st.checkbox("Remove duplicate rows")
+                    
+                    #הצגת אפשרות לטיפול בערכים חסרים (אם קריימיים כאלה)
+                    missing_cols = st.session_state.original_df.columns[st.session_state.original_df.isnull().any()].tolist()
+                    cleaning_selection = None
+                    if missing_cols:
+                        cleaning_options = [
+                                        "Do not clean missing values",
+                                        "Remove rows that are completely empty",
+                                        "Remove any row with a missing value"
+                                        ]
+                        cleaning_selection = st.radio("Handle missing values:", cleaning_options)
+                    else:
+                        st.info("No missing values were found in the file.")
 
+                    
+                    submitted = st.form_submit_button("confirm your cleaning choice")  
+                            
+                    if submitted:
+                        df_cleaned = st.session_state.original_df.copy()
+                        old_row = len(df_cleaned)
+
+                        #הסרת שורות כפולות אם נבחר
+                        if remove_duplicates_option:
+                            df_cleaned.drop_duplicates(inplace=True)
+                            
+                        if cleaning_selection:
+                            if cleaning_selection == cleaning_options[1]: # מחיקת שורות שהן ריקות לגמרי
+                                df_cleaned.dropna(how='all',inplace=True)
+                            elif cleaning_selection == cleaning_options[2]: # מחיקת שורות שיש בהן עמודות ריקות
+                                df_cleaned.dropna(how='any',inplace=True)
+
+                        new_row = len(df_cleaned)
+                        deleted_rows=old_row-new_row
+                        st.session_state['deleted_rows'] = deleted_rows
+                    
+                        
+                        #שמירת הנתותנים הנקיים
+                        st.session_state['temp_cleaned_df'] = df_cleaned
+                        st.session_state['show_confirmation'] = True
+                        st.rerun()  # רענון הדף כדי להציג את סיכום הניקוי
+                                    
+    
+    # מעבר לניתוח הנתונים
     else:
         st.header("Data Analysis")        
         df_to_analyze = st.session_state['cleaned_df']
 
         st.sidebar.title("Navigation Menu")
 
-        # כפתור לחזור אחורה ולנקות מחדש
-        if st.sidebar.button("Upload a New File or \n Clean Again"):
-            del st.session_state['cleaned_df']
-            del st.session_state['original_df']
-            st.rerun()
+        ## כפתור לחזור אחורה ולנקות מחדש
+        #if st.sidebar.button("Upload a New File or \n Clean Again"):
+        #    del st.session_state['cleaned_df']
+        #    del st.session_state['original_df']
+        #    st.rerun()
 
      
         # חישוב רשימות העמודות המספריות והקטגוריאליות
